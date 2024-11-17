@@ -1,5 +1,6 @@
 import numpy as np
 from numpy import ndarray
+from typing import Literal
 
 class MLP:
 
@@ -16,7 +17,7 @@ class MLP:
             self.g_w_sum = np.zeros((n_inputs, n_outputs))
             self.g_b_sum = np.zeros(n_outputs)
     
-    def __init__(self, layers_sizes: list[int]):
+    def __init__(self, layers_sizes: list[int], activation : Literal["tanh", "softmax"] = "tanh" ):
         layers: list[MLP.Layer] = []
 
         for i in range(len(layers_sizes) - 1):
@@ -25,8 +26,12 @@ class MLP:
 
         self.layers = layers
 
-        self.act_fn = lambda x: np.tanh(x)
-        self.d_act_fn = lambda x: (1 + x) * (1 - x)
+        if activation == "tanh":
+            self.act_fn = lambda x: np.tanh(x)
+            self.d_act_fn = lambda x: (1 + x) * (1 - x)
+        elif activation == "softmax":
+            self.act_fn = lambda x: np.exp(x) / np.sum(np.exp(x), axis=0)
+            self.d_act_fn = lambda x: x * (1 - x)
 
     def print_parameters(self):
         for i, layer in enumerate(self.layers):
@@ -72,7 +77,7 @@ class MLP:
         input_layer.w -= (alpha * g_w) / (np.sqrt(input_layer.g_w_sum) + 1e-8)
         input_layer.b -= (alpha * g_b) / (np.sqrt(input_layer.g_b_sum) + 1e-8)  
 
-    def train(self, x: ndarray, y: ndarray, learning_rate = 0.01, tolerated_error = 1e-8, max_epochs = 10000) -> tuple[float, int]:
+    def train(self, x: ndarray, y: ndarray, learning_rate = 0.01, tolerated_error = 1e-8, max_epochs = 10000):
         epoch = 0
         error = float('inf')
         while error > tolerated_error and epoch < max_epochs:
@@ -80,10 +85,10 @@ class MLP:
             output = self.forward(x)
             self.backward(x, y, output, learning_rate)
             error = 0.5 * np.sum((output - y) ** 2)
-            # if epoch % 5000 == 0:
-            #     print(f'Epoch {epoch}, Error: {error}')
+            if epoch % 1000 == 0:
+                print(f'Epoch {epoch}, Error: {error}')
 
         return error, epoch                
 
-    def predict(self, x : ndarray) -> ndarray:
+    def predict(self, x):
         return self.forward(x)
