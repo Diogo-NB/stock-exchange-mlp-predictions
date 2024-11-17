@@ -17,7 +17,7 @@ class MLP:
             self.g_w_sum = np.zeros((n_inputs, n_outputs))
             self.g_b_sum = np.zeros(n_outputs)
     
-    def __init__(self, layers_sizes: list[int], activation : Literal["tanh", "softmax"] = "tanh" ):
+    def __init__(self, layers_sizes: list[int], activation : Literal["tanh", "softmax", "sigmoid", "relu"] = "tanh" ):
         layers: list[MLP.Layer] = []
 
         for i in range(len(layers_sizes) - 1):
@@ -32,6 +32,12 @@ class MLP:
         elif activation == "softmax":
             self.act_fn = lambda x: np.exp(x) / np.sum(np.exp(x), axis=0)
             self.d_act_fn = lambda x: x * (1 - x)
+        elif activation == "sigmoid":
+            self.act_fn = lambda x: 1 / (1 + np.exp(-x))
+            self.d_act_fn = lambda x: self.act_fn(x) * (1 - self.act_fn(x)) 
+        elif activation == "relu":
+            self.act_fn = lambda x: np.maximum(0, x)
+            self.d_act_fn = lambda x: np.where(x > 0, 1, 0)
 
     def print_parameters(self):
         for i, layer in enumerate(self.layers):
@@ -85,8 +91,8 @@ class MLP:
             output = self.forward(x)
             self.backward(x, y, output, learning_rate)
             error = 0.5 * np.sum((output - y) ** 2)
-            if epoch % 1000 == 0:
-                print(f'Epoch {epoch}, Error: {error}')
+            # if epoch % 500 == 0:
+            #     print(f'Error: {error}')
 
         return error, epoch                
 
