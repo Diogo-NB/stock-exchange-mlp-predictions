@@ -5,17 +5,16 @@ from typing import Literal
 class MLP:
 
     class Layer:
-        random_init_limits = (-0.25, +0.25)
+        random_init_limits = (-0.20, +0.20)
 
         def __init__(self, n_inputs: int, n_outputs: int):
             lower_bound, upper_bound = self.random_init_limits
-
-            self.w = np.random.uniform(lower_bound, upper_bound, (n_inputs, n_outputs))                
+            self.w = np.random.uniform(lower_bound, upper_bound, (n_inputs, n_outputs))
             self.b = np.random.uniform(lower_bound, upper_bound, n_outputs)
 
             self.z = np.array([[]])
-            self.g_w_sum = np.zeros((n_inputs, n_outputs))
-            self.g_b_sum = np.zeros(n_outputs)
+            self.g_w_avg = np.zeros((n_inputs, n_outputs))  # RMSProp moving average for weights
+            self.g_b_avg = np.zeros(n_outputs)             # RMSProp moving average for biases
     
     def __init__(self, layers_sizes: list[int], activation : Literal["tanh", "softmax", "sigmoid", "relu"] = "tanh" ):
         layers: list[MLP.Layer] = []
@@ -56,32 +55,35 @@ class MLP:
             
         return z
     
-    def backward(self, x: ndarray, y: ndarray, output: ndarray, alpha) -> None:
+    def backward(self, x: ndarray, y: ndarray, output: ndarray, alpha, beta=0.9) -> None:
         g = output - y
 
-        for i in range(len(self.layers) -1, 0, -1):
+        for i in range(len(self.layers) - 1, 0, -1):
             layer = self.layers[i]
             prev_layer = self.layers[i - 1]
             g_w = np.dot(prev_layer.z.T, g)
             g_b = np.sum(g, axis=0)
 
-            layer.g_w_sum += g_w ** 2
-            layer.g_b_sum += g_b ** 2
-            
-            layer.w -= (alpha * g_w) / (np.sqrt(layer.g_w_sum) + 1e-8)
-            layer.b -= (alpha * g_b) / (np.sqrt(layer.g_b_sum) + 1e-8)
+            # Update RMSProp moving averages
+            layer.g_w_avg = beta * layer.g_w_avg + (1 - beta) * g_w ** 2
+            layer.g_b_avg = beta * layer.g_b_avg + (1 - beta) * g_b ** 2
 
+            # RMSProp weight and bias updates
+            layer.w -= (alpha * g_w) / (np.sqrt(layer.g_w_avg) + 1e-8)
+            layer.b -= (alpha * g_b) / (np.sqrt(layer.g_b_avg) + 1e-8)
+
+            # Backpropagate to previous layer
             g = np.dot(g, layer.w.T) * self.d_act_fn(prev_layer.z)
 
         input_layer = self.layers[0]
         g_w = np.dot(x.T, g)
-        g_b = np.sum(g, axis=0)  
+        g_b = np.sum(g, axis=0)
 
-        input_layer.g_w_sum += g_w ** 2
-        input_layer.g_b_sum += g_b ** 2
-        
-        input_layer.w -= (alpha * g_w) / (np.sqrt(input_layer.g_w_sum) + 1e-8)
-        input_layer.b -= (alpha * g_b) / (np.sqrt(input_layer.g_b_sum) + 1e-8)  
+        input_layer.g_w_avg = beta * input_layer.g_w_avg + (1 - beta) * g_w ** 2
+        input_layer.g_b_avg = beta * input_layer.g_b_avg + (1 - beta) * g_b ** 2
+
+        input_layer.w -= (alpha * g_w) / (np.sqrt(input_layer.g_w_avg) + 1e-8)
+        input_layer.b -= (alpha * g_b) / (np.sqrt(input_layer.g_b_avg) + 1e-8)  
 
     def train(self, x: ndarray, y: ndarray, learning_rate = 0.01, tolerated_error = 1e-8, max_epochs = 10000):
         epoch = 0
@@ -91,8 +93,8 @@ class MLP:
             output = self.forward(x)
             self.backward(x, y, output, learning_rate)
             error = 0.5 * np.sum((output - y) ** 2)
-            # if epoch % 500 == 0:
-            #     print(f'Error: {error}')
+            if epoch % 500 == 0:
+                print(f'Error: {error}')
 
         return error, epoch                
 
